@@ -1,0 +1,30 @@
+{
+    "compilerOptions": {
+        "allowJs" : true, // to combine with "maxNodeModuleJsDepth" option
+        "baseUrl": ".", // must be specified if "paths" is
+        "lib": [
+            "dom",
+            "es7" // compilation libraries
+        ],
+        "listEmittedFiles" : true, // list the JS files created
+        "listFiles" : false, // list the files used during compilation
+        "maxNodeModuleJsDepth" : 10, // obligatory with allowJS
+        "module" : "commonjs", // module code generation
+        "moduleResolution" : "node", // for node.js
+        "outDir" : "./", // path for compiled files
+        "preserveConstEnums" : true,
+        "removeComments" : false,
+        "target" : "ES6",
+        "paths": {
+            "*": [
+                "node_modules/"
+            ]
+        } // module resolution
+    },
+    "files": [ // path to the files to compile
+        "./ts/src/index.ts",
+        "./ts/src/test/index.ts",
+        "./ts/src/test/test.ts",
+        "./ts/src/types/index.ts"
+    ]
+}
