@@ -1,6 +1,5 @@
 {
     "compilerOptions": {
-        "allowJs" : true, // to combine with "maxNodeModuleJsDepth" option
         "baseUrl": ".", // must be specified if "paths" is
         "lib": [
             "dom",
@@ -12,14 +11,14 @@
         "module" : "commonjs", // module code generation
         "moduleResolution" : "node", // for node.js
         "outDir" : "./", // path for compiled files
-        "preserveConstEnums" : true,
-        "removeComments" : false,
-        "target" : "ES6",
         "paths": {
             "*": [
                 "node_modules/"
             ]
-        } // module resolution
+        }, // module resolution
+        "preserveConstEnums" : true,
+        "removeComments" : false,
+        "target" : "ES6"
     },
     "files": [ // path to the files to compile
         "./ts/src/index.ts",

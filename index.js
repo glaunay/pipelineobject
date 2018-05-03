@@ -6,8 +6,10 @@
 
 ***** TODO *****
 
+- modify the duplicate imports of the task types by creating a @types/taskobject/ NPM repo
+    (see https://www.typescriptlang.org/docs/handbook/declaration-files/introduction.html
+    and https://codeburst.io/https-chidume-nnamdi-com-npm-module-in-typescript-12b3b22f0724)
 - push method
-- see the error when importing "sim" into the createTask function (#importInFunc)
 - need to use a childProcess to 'npm install @tagTask' ? in the createTask function
 - git
 - npm
@@ -18,235 +20,213 @@
 
 */
 Object.defineProperty(exports, "__esModule", { value: true });
-const events = require("events");
-const tkTest = require("taskobject/test/index"); // to access to JMsetup()
-const uuid = require("uuid/v4");
-const sim = require("taskobject/test/simpletask"); // temporary : see createTask method (#importInFunc)
-const typ = require("./types/index"); // types
+const stream = require("stream");
+const util = require("util");
+const tkTyp_js = require("taskobject/types/index"); // task types JS file
+const typ = require("./types/index"); // pipeline types
+// literal to complete with all the possible task modules
+let taskModules = {
+    dualtask: require('taskobject/test/dualtask').dualtask,
+    simpletask: require('taskobject/test/simpletask').simpletask
+};
 class Pipeline {
-    constructor(topology) {
-        this.inlets = []; // list of inlets (ie slots)
-        this.outlets = []; // list of outlets (ie tasks)
+    constructor(jobManager, nodes) {
+        this.jobManager = null; // job manager (engineLayer version)
+        this.nodes = []; // list of outlets (ie tasks)
+        this.tasks = []; // list of the tasks of the pipeline (corresponding to this.nodes)
+        this.slots = []; // list of the slots of the tasks of the pipeline
         this.links = []; // list of links (ie pipes)
-        this.taskRoot = null;
-        if (typeof topology == 'undefined')
+        if (!jobManager)
+            throw 'ERROR : no jobManager specified !';
+        if (typeof nodes == 'undefined')
             throw 'ERROR : a topology must be specified !';
-        if (!typ.is_lightTopo(topology))
-            throw 'ERROR : wrong format of the topology !';
-        let fullTopo = this.makeFullTopo(topology);
-        this.inlets = fullTopo.inlets;
-        this.outlets = fullTopo.outlets;
-        this.links = fullTopo.links;
-    }
-    /*
-    * From a light @topology (see the types script), make a full topology,
-    * by checking the consitence of the light topology values :
-    * (see ./ts/src/types/index.ts for more details)
-    * - INLETS : the 'uuid' is composed of 2 parts splited with a "." :
-    * 		1st part = a number between 0 (included) and outlets.length (excluded).
-    * 		It is the outlet index which it (the slot) belongs.
-    * 		2nd part = the name of the slot in the outlet (task).
-    * 		-->> from the 'uuid', we find :
-    * 			- 'outletNum' and 'tagtask' thanks to the 1st part
-    * 			- 'slot' thanks to the 2nd part
-    * - OULETS : 'tagtask' is the unique tag specified at the task creation (unique)
-    * 		-->> in each outlet JSON we add :
-    * 			- 'index' : the number of the outlet (used in the inlets with 'outletNum')
-    * 			- 'uuid' : a random uuid (is it useful ?)
-    * - LINKS : 'source' must be the index of an outlet and 'target' must be the uuid of
-    * 		an inlet -> checkLinks method.
-    */
-    makeFullTopo(topology) {
-        if (!typ.is_lightTopo(topology))
-            return null;
-        let re_uuid_inlet = /([0-9]+)\.([a-z]+)/i;
-        let fullTopo = {
-            'inlets': [],
-            'outlets': [],
-            'links': []
-        };
-        fullTopo.inlets = topology.inlets.map((i) => {
-            let re_res = re_uuid_inlet.exec(i.uuid);
-            if (re_res == null)
-                throw 'ERROR in a inlet uuid : ' + i.uuid;
-            let outletNum = parseInt(re_res[1], 10);
-            if (isNaN(outletNum))
-                throw 'ERROR : first part of an inlet uuid must be a number : ' + i.uuid;
-            if (outletNum >= topology.outlets.length)
-                throw 'ERROR : no outlet with the number ' + outletNum + ' -> check inlet uuid : ' + i.uuid;
-            let slot = re_res[2];
-            let tagtask = topology.outlets[outletNum].tagtask;
-            return {
-                uuid: i.uuid,
-                outletNum,
-                slot,
-                tagtask
-            };
-        });
-        fullTopo.outlets = topology.outlets.map((elem, i) => {
-            return {
-                tagtask: elem.tagtask,
-                index: i,
-                uuid: uuid() // is uuid really useful ?
-            };
-        });
-        // LINKS : no modification needed
-        if (!this.checkLinks(topology))
-            throw 'ERROR : topology inconsitency : \'source\' = outlet and \'target\' = inlet';
-        fullTopo.links = topology.links;
-        return fullTopo;
-    }
-    /*
-    * IS IT USEFUL ?
-    * For each literal of the @jsonArray, assign a uuid with the 'uuid' key.
-    * If the 'uuid' key already exists, erase it (if @force = T) or not (if @force = F).
-    */
-    assign_uuid(jsonArray, force) {
-        return jsonArray.map((j) => {
-            if (j.hasOwnProperty('uuid')) {
-                if (force)
-                    j['uuid'] = uuid();
-            }
-            else {
-                j['uuid'] = uuid();
-            }
-            return j;
-        });
+        if (!Array.isArray(nodes))
+            throw 'ERROR : nodes must be an array !';
+        for (let n of nodes)
+            if (!typ.isNode(n))
+                throw 'ERROR : @nodes must contain only node types !';
+        this.jobManager = jobManager;
+        this.nodes = nodes;
+        this.tasks = this.createTasks();
+        this.slots = this.collectSlots();
     }
     /*
     * Serialize the pipeline object.
     */
     serialize() {
         let topo = {
-            inlets: this.inlets,
-            outlets: this.outlets,
+            nodes: this.nodes,
             links: this.links
         };
         return topo;
     }
     /*
-    * For each links of @topology, check if the source is an index outlet
-    * and if the target is an inlet.
+    * For each task of the pipeline, collect its slots in an array of JSONs.
+    * For example, for the following pipeline :
+    * A -> C.a
+    * B -> C.b
+    * we have the following topology :
+    * { nodes: [ {tagtask: A}, {tagtask: B}, {tagtask: C} ]
+    *   links: [ {source: 0, target: 2, slotName: a}, {source: 1, target: 2, slotName: b} ] }
+    * an we have the following return to this method :
+    * 		[ { a: A.a Object }, { a: B.a Object }, { a: C.a Object, b: C.b Object } ]
     */
-    checkLinks(topology) {
-        if (!typ.is_lightTopo(topology))
+    collectSlots() {
+        return this.tasks.map((t) => {
+            let slots = t.getSlots(); // returns an array of slots
+            let slotsMap = {};
+            for (let s of slots) {
+                slotsMap[s.symbol] = s;
+            }
+            return slotsMap;
+        });
+    }
+    /*
+    * Create a pipe from a readable stream (@rs) to a writable stream (@slot)
+    * and listen to the events (coming from the slot and its task) :
+    * rs.pipe(slot).on('events', (data) => {});
+    */
+    createPipe(rs, slot) {
+        if (!tkTyp_js.isSlot(slot))
+            throw 'ERROR : @slot must be a slot type';
+        rs.pipe(slot);
+    }
+    /*
+    * Create the tasks of the pipeline.
+    */
+    createTasks() {
+        let management = { 'jobManager': this.jobManager };
+        return this.nodes.map((n) => {
+            return new taskModules[n.tagtask](management);
+        });
+    }
+    /*
+    * Check if the @link is valid by :
+    * 	(1) looking if its type is link (type guard)
+    * 	(2) checking the existence of the source and target indexes in this.nodes
+    * 	(3) checking if the slotName exists in our slot list
+    */
+    linkIsValid(link) {
+        // (1)
+        if (!typ.isLink(link))
             return false;
-        let inlet_ids = topology.inlets.map(e => e.uuid);
-        for (let l of topology.links) {
-            if (!inlet_ids.includes(l.target))
-                return false;
-            if (parseInt(l.source, 10) >= topology.outlets.length)
-                return false;
+        // (2)
+        if (typeof this.nodes[link.source] === 'undefined')
+            return false;
+        if (typeof this.nodes[link.target] === 'undefined')
+            return false;
+        // (3)
+        for (let s in this.slots[link.target]) {
+            if (s == link.slotName)
+                return true;
         }
+        return false;
+    }
+    /*
+    * For each link in @links :
+    * 	(1) check if it is valid
+    * 	(2) create the link between the task (index link.source into this.tasks)
+    * 							and the slot (index link.target into this.slots and key link.slotName)
+    * When all links have been created (and are obviously valids), take the @links in this.links (3)
+    * Return all the free slots waiting for their input (4)
+    */
+    makeLinks(links) {
+        for (let l of links) {
+            if (!this.linkIsValid(l))
+                throw 'ERROR : the link ' + util.format(l) + ' is invalid !'; // (1)
+            let s = this.slots[l.target];
+            // console.log('this.tasks[l.source]')
+            // console.log(this.tasks[l.source])
+            // console.log('s[l.slotName]')
+            // console.log(s[l.slotName])
+            this.createPipe(this.tasks[l.source], s[l.slotName]); // (2)
+        }
+        this.links = links; // (3)
+        //return this.findFreeSlots(links); // (4)
+    }
+    /*
+    * Find the slots that are not in a link. We call them "free slots".
+    * Goal : to push an input on a slot (either at the beginning or in the middle of the pipeline),
+    * the slot needs to be free (no pipe on it so not involved in a link).
+    */
+    /* NOT SURE IT IS USEFUL
+    private findFreeSlots (links: typ.link[]): tkTyp_ts.slot[] {
+        let freeSlots: tkTyp_ts.slot[] = [];
+        for (let [s_i, s_lit] of this.slots.entries()) { // for each literal in the array this.slots (corresponding to a task)
+            for (let s_key in s_lit) { // for each slot in the literal
+                let slotFound: boolean = false;
+                for (let l of links) { // for each link
+                    if (l.target === s_i && l.slotName === s_key) {
+                        slotFound = true;
+                        break;
+                    }
+                }
+                if (!slotFound) freeSlots.push(s_lit[s_key]);
+            }
+        }
+        return freeSlots;
+    }*/
+    /*
+    * Check if the @slotRef exists in this.slots.
+    */
+    slotRefExists(slotRef) {
+        if (!typ.isSlotRef(slotRef))
+            throw 'ERROR : @slotRef must be a type slotRef !';
+        if (typeof this.slots[slotRef.taskIndex] === 'undefined')
+            return false;
+        let s_lit = this.slots[slotRef.taskIndex];
+        if (!s_lit.hasOwnProperty(slotRef.slotName))
+            return false;
         return true;
     }
     /*
-    * Find the inlets that are not in a link. We call them "free inlets".
-    * Goal : to push an input on an inlet (either at the beginning or in the middle of the pipeline),
-    * the inlet needs to be free (no pipe on it so not involved in a link).
+    * Check if a slot is free (no pipe on it = not involved in a link), thanks to the @slotRef.
     */
-    /*
-    findFreeInlets (): typ.Inlet[] {
-        let targets: string[] = this.links.map(e => e.target);
-        return this.inlets.filter((val) => {
-            return !targets.includes(val.uuid);
-        });
-    }
-    */
-    /*
-    * Search if the @inletId is free (ie not involved in a link).
-    */
-    isFree(inletId) {
-        // check if @inletId exists in the inlets
-        let inlet_ids = this.inlets.map(e => e.uuid);
-        if (!inlet_ids.includes(inletId))
-            throw 'ERROR : the inlet id ' + inletId + ' does not exists !';
-        // is it free ?
-        let targets = this.links.map(e => e.target);
-        return !targets.includes(inletId); // includes is the contrary to free
+    isFree(slotRef) {
+        if (!typ.isSlotRef(slotRef))
+            throw 'ERROR : @slotRef must be a type slotRef !';
+        if (!this.slotRefExists(slotRef))
+            return false;
+        for (let l of this.links) {
+            if (l.target === slotRef.taskIndex && l.slotName === slotRef.slotName)
+                return false;
+        }
+        return true;
+        ;
     }
     /*
-    * To test without any MicroService JobManager.
+    * From a string (@myString) and a key (@myKey), create a JSON
+    * and push it into a readable stream to then return it.
     */
-    test_without_MS(opt) {
-        let emitter = new events.EventEmitter();
-        tkTest.JMsetup(opt).on('ready', (JMobject) => {
-            emitter.emit('ready', JMobject);
-        });
-        return emitter;
+    stringToJsonStream(myString, myKey) {
+        if (typeof myString !== 'string')
+            throw 'ERROR : @myString must be a string type !';
+        if (typeof myKey !== 'string')
+            throw 'ERROR : @myKey must be a string type !';
+        myString = myString.replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+        let rs = new stream.Readable();
+        rs.push('{ "' + myKey + '" : "');
+        rs.push(myString);
+        rs.push('"}');
+        rs.push(null);
+        return rs;
     }
     /*
-    * Create a pipe from @taskA to @taskB and listen to the events (coming from taskB) :
-    * taskA.pipe(taskB).on('events', (data) => {});
+    * To push the content of an input on a slot.
     */
-    createPipe(taskA, taskB) {
-        taskA.pipe(taskB)
-            .on('processed', results => {
-            console.log('**** data');
-        })
-            .on('err', (err, jobID) => {
-            console.log('**** ERROR');
-        })
-            .on('stderrContent', buf => {
-            console.log('**** STDERR');
-        });
-    }
-    /*
-    * TO BE COMPLETED !
-    * Create a specific task.
-    */
-    createTask(tagTask, JMobject) {
-        // need to 'npm install @tagTask' ?
-        // (#importInFunc)
-        // import task = require(tagTask); // error : TS does not accept import in function
-        console.log(sim);
-        console.log(tagTask);
-        console.log(sim[tagTask]);
-        let management = { 'jobManager': JMobject };
-        let syncMode = true;
-        let toto = new sim[tagTask](management, syncMode);
-        return toto;
-    }
-    /*
-    * TO BE COMPLETED !
-    * Construct the pipeline : create the tasks (1) and the pipes (2).
-    */
-    // OLD VERSION WITHOUT SLOTS
-    // build () {
-    // let taskArray: any[] = [];
-    // this.test_without_MS().on('ready', (JMobject) => {
-    // 	for (let task of this.nodes) { // (1)
-    // 		taskArray.push(this.createTask(task.tag, JMobject));
-    // 	}
-    // 	for (let link of this.links) { // (2)
-    // 		this.createPipe(link.source, link.target);
-    // 	}
-    // });
-    // }
-    /*
-    * TO BE COMPLETED !
-    * Construct the pipeline : create the tasks (1) and the pipes (2).
-    */
-    build() {
-        let self = this;
-        let emitter = new events.EventEmitter();
-        let taskArray = [];
-        this.test_without_MS().on('ready', (JMobject) => {
-            // task instantiations
-            self.outlets.map((val) => {
-                console.log(val.tagtask);
-                self.createTask(val.tagtask, JMobject);
-            });
-            emitter.emit('ready');
-        });
-        return emitter;
-    }
-    /*
-    * TO BE COMPLETED !
-    * To start a pipeline with an input.
-    */
-    push(inputFile) {
-        //tkTest.fileToStream(inputFile).pipe() // prototype
+    push(inputContent, slotRef) {
+        if (typeof inputContent !== 'string')
+            throw 'ERROR : @inputContent must be a type string !';
+        if (!typ.isSlotRef(slotRef))
+            throw 'ERROR : @slotRef must be a type slotRef !';
+        if (this.isFree(slotRef)) {
+            let rs = this.stringToJsonStream(inputContent, slotRef.slotName);
+            let mySlot = this.slots[slotRef.taskIndex][slotRef.slotName];
+            this.createPipe(rs, mySlot);
+        }
+        else {
+            console.log('push not possible');
+        }
     }
 }
 exports.Pipeline = Pipeline;

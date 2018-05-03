@@ -1,3 +1,4 @@
+cacheDir/*
 # Logs
 logs
 *.log
