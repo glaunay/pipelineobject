@@ -1,0 +1,33 @@
+{
+  "name": "pipelineobject",
+  "version": "1.0.0",
+  "description": "Class to instantiate pipelines",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "dependencies": {
+    "taskobject": "^1.2.3",
+    "winston": "^2.4.1"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/melaniegarnier/pipelineobject.git"
+  },
+  "keywords": [
+    "pipeline",
+    "task",
+    "taskobject",
+    "jobmanager"
+  ],
+  "author": "MelanieGarnier",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/melaniegarnier/pipelineobject/issues"
+  },
+  "homepage": "https://github.com/melaniegarnier/pipelineobject#readme"
+}
