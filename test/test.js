@@ -1,18 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-const events = require("events");
 const tkTest = require("taskobject/test/index");
 const p = require("./../index"); // pipeline
-/*
-* To test without any MicroService JobManager.
-*/
-function test_without_MS(opt) {
-    let emitter = new events.EventEmitter();
-    tkTest.JMsetup(opt).on('ready', (JMobject) => {
-        emitter.emit('ready', JMobject);
-    });
-    return emitter;
-}
 // Here a baby tree :
 // A -> B.1
 let baby_tree = {
@@ -89,23 +78,12 @@ let truetree_dual = {
         { source: 1, target: 2, slotName: 'input2' } // target is the slot dualtask.input2
     ]
 };
-let opt = {
-    bean: {
-        engineType: "slurm",
-        binaries: {
-            "cancelBin": "/opt/slurm/bin/scancel",
-            "submitBin": "/opt/slurm/bin/sbatch",
-            "queueBin": "/opt/slurm/bin/squeue"
-        }
-    }
-};
-test_without_MS(opt).on('ready', (jobManager) => {
-    let myPipeline = new p.Pipeline(jobManager, truetree_dual.nodes);
+tkTest.JMsetup()
+    .on('ready', (jobManager) => {
+    let myPipeline = new p.Pipeline(jobManager, truetree_dual.nodes, truetree_dual.links);
     myPipeline.tasks[0].on('processed', () => {
         console.log('yeah task with index 0 is finished !');
     });
-    myPipeline.makeLinks(truetree_dual.links);
-    myPipeline.push('titi et toto sont sur un bateau', { taskIndex: 0, slotName: 'input' });
-    myPipeline.push('toto tombe à l\'eau', { taskIndex: 1, slotName: 'input' });
-    //myPipeline.makeLinks(truetree_dual.links);
+    myPipeline.push('titi', { taskIndex: 0, slotName: 'input' });
+    myPipeline.push('toto', { taskIndex: 1, slotName: 'input' });
 });

@@ -8,7 +8,6 @@
 - modify the duplicate imports of the task types by creating a @types/taskobject/ NPM repo
 	(see https://www.typescriptlang.org/docs/handbook/declaration-files/introduction.html
 	and https://codeburst.io/https-chidume-nnamdi-com-npm-module-in-typescript-12b3b22f0724)
-- push method
 - need to use a childProcess to 'npm install @tagTask' ? in the createTask function
 - git
 - npm
@@ -36,11 +35,17 @@ import typ = require('./types/index'); // pipeline types
 import du = require('taskobject/test/dualtask');
 import sim = require('taskobject/test/simpletask');
 
+
+/******************************** TO COMPLETE ********************************/
 // literal to complete with all the possible task modules
+
 let taskModules = {
 	dualtask: require('taskobject/test/dualtask').dualtask,
 	simpletask: require('taskobject/test/simpletask').simpletask
 }
+
+/*****************************************************************************/
+
 
 export class Pipeline {
 	private readonly jobManager: Object = null; // job manager (engineLayer version)
@@ -49,7 +54,7 @@ export class Pipeline {
 	private readonly slots: { [s: string] : tkTyp_ts.slot }[] = []; // list of the slots of the tasks of the pipeline
 	private links: typ.link[] = []; // list of links (ie pipes)
 
-	public constructor (jobManager: Object, nodes: typ.node[]) {
+	public constructor (jobManager: Object, nodes: typ.node[], links: typ.link[]) {
 		if (! jobManager) throw 'ERROR : no jobManager specified !';
 		if (typeof nodes == 'undefined') throw 'ERROR : a topology must be specified !';
 		if (! Array.isArray(nodes)) throw 'ERROR : nodes must be an array !';
@@ -59,6 +64,8 @@ export class Pipeline {
 		this.nodes = nodes;
 		this.tasks = this.createTasks();
 		this.slots = this.collectSlots();
+
+		this.makeLinks(links)
 	}
 
 	/*
@@ -108,7 +115,11 @@ export class Pipeline {
 	* Create the tasks of the pipeline.
 	*/
 	private createTasks (): tkTyp_ts.taskobject[] {
-		let management: {} = {'jobManager' : this.jobManager}
+		let jobProfile = null; // "arwen_express" or "arwen_cpu" for example
+		let management: {} = {
+			'jobManager' : this.jobManager,
+			'jobProfile': jobProfile
+		};
 		return this.nodes.map((n) => {
 			return new taskModules[n.tagtask](management);
 		});
@@ -139,7 +150,6 @@ export class Pipeline {
 	* 	(2) create the link between the task (index link.source into this.tasks)
 	* 							and the slot (index link.target into this.slots and key link.slotName)
 	* When all links have been created (and are obviously valids), take the @links in this.links (3)
-	* Return all the free slots waiting for their input (4)
 	*/
 	public makeLinks (links: typ.link[]): void { //tkTyp_ts.slot[] {
 		for (let l of links) {
@@ -148,7 +158,6 @@ export class Pipeline {
 			this.createPipe(this.tasks[l.source], s[l.slotName]); // (2)
 		}
 		this.links = links; // (3)
-		//return this.findFreeSlots(links); // (4)
 	}
 
 	/*

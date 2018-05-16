@@ -9,7 +9,6 @@
 - modify the duplicate imports of the task types by creating a @types/taskobject/ NPM repo
     (see https://www.typescriptlang.org/docs/handbook/declaration-files/introduction.html
     and https://codeburst.io/https-chidume-nnamdi-com-npm-module-in-typescript-12b3b22f0724)
-- push method
 - need to use a childProcess to 'npm install @tagTask' ? in the createTask function
 - git
 - npm
@@ -24,13 +23,15 @@ const stream = require("stream");
 const util = require("util");
 const tkTyp_js = require("taskobject/types/index"); // task types JS file
 const typ = require("./types/index"); // pipeline types
+/******************************** TO COMPLETE ********************************/
 // literal to complete with all the possible task modules
 let taskModules = {
     dualtask: require('taskobject/test/dualtask').dualtask,
     simpletask: require('taskobject/test/simpletask').simpletask
 };
+/*****************************************************************************/
 class Pipeline {
-    constructor(jobManager, nodes) {
+    constructor(jobManager, nodes, links) {
         this.jobManager = null; // job manager (engineLayer version)
         this.nodes = []; // list of outlets (ie tasks)
         this.tasks = []; // list of the tasks of the pipeline (corresponding to this.nodes)
@@ -49,6 +50,7 @@ class Pipeline {
         this.nodes = nodes;
         this.tasks = this.createTasks();
         this.slots = this.collectSlots();
+        this.makeLinks(links);
     }
     /*
     * Serialize the pipeline object.
@@ -95,7 +97,11 @@ class Pipeline {
     * Create the tasks of the pipeline.
     */
     createTasks() {
-        let management = { 'jobManager': this.jobManager };
+        let jobProfile = null; // "arwen_express" or "arwen_cpu" for example
+        let management = {
+            'jobManager': this.jobManager,
+            'jobProfile': jobProfile
+        };
         return this.nodes.map((n) => {
             return new taskModules[n.tagtask](management);
         });
@@ -128,21 +134,15 @@ class Pipeline {
     * 	(2) create the link between the task (index link.source into this.tasks)
     * 							and the slot (index link.target into this.slots and key link.slotName)
     * When all links have been created (and are obviously valids), take the @links in this.links (3)
-    * Return all the free slots waiting for their input (4)
     */
     makeLinks(links) {
         for (let l of links) {
             if (!this.linkIsValid(l))
                 throw 'ERROR : the link ' + util.format(l) + ' is invalid !'; // (1)
             let s = this.slots[l.target];
-            // console.log('this.tasks[l.source]')
-            // console.log(this.tasks[l.source])
-            // console.log('s[l.slotName]')
-            // console.log(s[l.slotName])
             this.createPipe(this.tasks[l.source], s[l.slotName]); // (2)
         }
         this.links = links; // (3)
-        //return this.findFreeSlots(links); // (4)
     }
     /*
     * Find the slots that are not in a link. We call them "free slots".

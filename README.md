@@ -112,24 +112,16 @@ import p = require("pipelineobject");
 
 To instantiate a pipeline object, you need :
 - a Job Manager object (`JMobject`) given by the function ...
-- a literal describing the pipeline nodes (see the [List of nodes](#list-of-nodes) section).  
+- a list of literals describing the pipeline nodes (see the [List of nodes](#list-of-nodes) section),
+- a list of the links (see the [List of links](#list-of-links) section).  
 
 Then you can instantiate your pipeline object :
 
 ```javascript
 test_without_MS().on('ready', (JMobject) => {
-	let myPipeline = new p.Pipeline(JMobject, myNodes);
+	let myPipeline = new p.Pipeline(JMobject, myNodes, myLinks);
 });
 ```
-
-### Make links
-
-Before pushing your inputs on the slots, you need to create the links. Use the `makeLinks` method and give it a list of links (see the [List of links](#list-of-links) section) :
-
-```javascript
-myPipeline.makeLinks(myLinks);
-```
-
 
 ### Push input
 
@@ -143,13 +135,13 @@ myPipeline.push(contentInput, { taskIndex: 0, slotName: "slot1" });
 
 ## New task modules
 
-When you want to use a task newly created in a pipeline (`myNewTask`), you have to add it to the imports in the `./index.js` script :
+When you want to use a task newly created in a pipeline (`myNewTask`), you have to add it to the imports in the `./index.js` script, at its beginning :
 
 ```javascript
 let taskModules = {
 	naccesstask: require('naccesstask').naccesstask,
 	hextask: require('hextask').hextask,
-	myNewTask: require('myNewTask').myNewTask
+	myNewTask: require('myNewTask').myNewTask // added
 }
 ```
 
