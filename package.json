@@ -1,6 +1,6 @@
 {
   "name": "pipelineobject",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Class to instantiate pipelines",
   "main": "index.js",
   "directories": {
