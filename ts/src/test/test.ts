@@ -1,109 +1,66 @@
-import events = require('events');
+import commander = require('commander');
 
-import tk = require("taskobject"); // task
-import tkTest = require("taskobject/test/index");
-
-import p = require ('./../index'); // pipeline
-import typ = require('./../types/index'); // pipeline types
+import testFunc = require("./index"); // pipeline test functions
 
 
-// Here a baby tree :
-// A -> B.1
-let baby_tree: typ.topology = {
-	nodes: [
-		{tagtask: 'A'}, // index = 0
-		{tagtask: 'B'} // index = 1
-	],
-	links: [
-		{source: 0, target: 1, slotName: '1'}
-	]
-}
+let simpleTest: boolean = false,
+	dualTest: boolean = false;
+let treePath: string = null,
+	inputPath: string = null;
 
-// Here a tree with one root :
-// A -> B.1 -> D.1
-// A -> C.1 -> D.2
-let tree: typ.topology = {
-	nodes: [
-		{tagtask: 'A'}, // index = 0
-		{tagtask: 'B'}, // index = 1
-		{tagtask: 'C'}, // index = 2
-		{tagtask: 'D'} // index = 3
-	],
-	links: [
-		{source: 0, target: 1, slotName: '1'},
-		{source: 0, target: 2, slotName: '1'},
-		{source: 1, target: 3, slotName: '1'},
-		{source: 2, target: 3, slotName: '2'}
-	]
-}
 
-// Here a tree with two roots : 
-// A -> B.1
-// C -> B.2
-let tree2: typ.topology = {
-	nodes: [
-		{tagtask: 'A'}, // index = 0
-		{tagtask: 'B'}, // index = 1
-		{tagtask: 'C'} // index = 2
-	],
-	links: [
-		{source: 0, target: 1, slotName: '1'},
-		{source: 2, target: 1, slotName: '2'}
-	]
-}
-
-/* ------ Here a true simple tree -------
-* simpletask -> simpletask
-*/
-
-/*
-NODES : 'tagtask' is the unique tag specified at the task creation (must be unique)
-
-LINKS : 'source' must be a number (parseInt) between 0 (included) and nodes.length (excluded)
-'target' has the same rule than 'source'. Both are an index referencing a node.
-'slotName' is the slot name in the task which the 'target' number refer.
-*/
-
-let truetree_simple: typ.topology = {
-	nodes: [
-		{tagtask: 'simpletask'}, // index = 0
-		{tagtask: 'simpletask'} // index = 1
-	],
-	links: [
-		{source: 0, target: 1, slotName: 'input'}
-	]
-}
-
-/* ------ Here a true dual tree -------
-* simpletask_A -> dualtask_C
-* simpletask_B -> dualtask_C
-*/
-
-let truetree_dual: typ.topology = {
-	nodes: [
-		{tagtask: 'simpletask'}, // index = 0
-		{tagtask: 'simpletask'}, // index = 1
-		{tagtask: 'dualtask'} // index = 2
-	],
-	links: [
-		{source: 0, target: 2, slotName: 'input1'}, // target is the slot dualtask.input1
-		{source: 1, target: 2, slotName: 'input2'} // target is the slot dualtask.input2
-	]
+//////////////// usage //////////////////
+var usage = function (): void {
+    let str: string = '\n\n  Examples:\n\n'
+    str += '    For a simple test (with a simple tree):\n';
+    str += '      node ./test/test.js\n';
+    str += '        -s\n\n';
+    str += '    For a dual test (with a dual tree):\n';
+    str += '      node ./test/test.js\n';
+    str += '        -d\n\n';
+    str += '	*****   what is a simple tree ?   *****\n';
+    str += '	simpletask -> simpletask.input\n\n';
+    str += '	*****    what is a dual tree ?    *****\n';
+    str += '	simpletask_A -> dualtask_C.input1\n';
+    str += '	simpletask_B -> dualtask_C.input2\n\n';
+    console.log(str);
 }
 
 
+///////////// arguments /////////////
+commander
+    .usage('node ./test/test.js [options]        # in the taskobject directory')
+    .description('A script for testing a simpletask or a dualtask')
+    .on('--help', () => { usage(); })
+    .option('-u, --usage', 'display examples of usages',
+        () => { usage(); process.exit(); })
+    .option('-s, --simple', 'make a simple test (with a simple tree, more info with -h)',
+        () => { simpleTest = true; })
+    .option('-d, --dual', 'make a dual test (with a dual tree, more info with -h)',
+        () => { dualTest = true; })
+    .parse(process.argv);
 
-tkTest.JMsetup()
+if (! simpleTest && ! dualTest) throw usage();
+
+
+
+
+testFunc.JMsetup()
 .on('ready', (jobManager) => {
-	let myPipeline = new p.Pipeline(jobManager, truetree_dual.nodes, truetree_dual.links);
-	
-	myPipeline.tasks[0].on('processed', () => {
+	let myPipeline;
+
+	if (simpleTest) myPipeline = testFunc.simpleTest(jobManager);
+	else if (dualTest) myPipeline = testFunc.dualTest(jobManager);
+
+	myPipeline.tasks[0].on('processed', (results) => {
 		console.log('yeah task with index 0 is finished !');
+		console.log('results are :');
+		console.dir(results);
 	});
-	
-	myPipeline.push('titi', {taskIndex: 0, slotName: 'input'});
-	myPipeline.push('toto', {taskIndex: 1, slotName: 'input'});
 });
+
+
+
 
 
 

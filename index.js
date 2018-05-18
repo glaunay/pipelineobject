@@ -10,9 +10,7 @@
     (see https://www.typescriptlang.org/docs/handbook/declaration-files/introduction.html
     and https://codeburst.io/https-chidume-nnamdi-com-npm-module-in-typescript-12b3b22f0724)
 - need to use a childProcess to 'npm install @tagTask' ? in the createTask function
-- git
-- npm
-- doc README.md
+- at the instanciation of a task, check it exists in the "taskModules" literal
 
 
 ****************

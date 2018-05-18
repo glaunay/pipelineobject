@@ -9,9 +9,7 @@
 	(see https://www.typescriptlang.org/docs/handbook/declaration-files/introduction.html
 	and https://codeburst.io/https-chidume-nnamdi-com-npm-module-in-typescript-12b3b22f0724)
 - need to use a childProcess to 'npm install @tagTask' ? in the createTask function
-- git
-- npm
-- doc README.md
+- at the instanciation of a task, check it exists in the "taskModules" literal
 
 
 ****************
@@ -27,7 +25,7 @@ import tkTest = require('taskobject/test/index'); // to access to JMsetup()
 import util = require('util');
 import uuid = require('uuid/v4');
 
-import tkTyp_ts = require('taskobject/ts/src/types/index'); // task types TS file (for )
+import tkTyp_ts = require('taskobject/ts/src/types/index'); // task types TS file
 import tkTyp_js = require('taskobject/types/index'); // task types JS file
 import typ = require('./types/index'); // pipeline types
 
@@ -151,7 +149,7 @@ export class Pipeline {
 	* 							and the slot (index link.target into this.slots and key link.slotName)
 	* When all links have been created (and are obviously valids), take the @links in this.links (3)
 	*/
-	public makeLinks (links: typ.link[]): void { //tkTyp_ts.slot[] {
+	private makeLinks (links: typ.link[]): void { //tkTyp_ts.slot[] {
 		for (let l of links) {
 			if (! this.linkIsValid(l)) throw 'ERROR : the link ' + util.format(l) + ' is invalid !'; // (1)
 			let s = this.slots[l.target];

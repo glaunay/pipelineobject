@@ -1,4 +1,8 @@
 
+import p = require('../index');
+
+export interface pipelineobject extends p.Pipeline {}
+
 export interface node {
 	tagtask: string
 }
